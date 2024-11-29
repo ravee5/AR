@@ -34,19 +34,18 @@
     const frameInterval = animationDuration / frameCount;
 
     let currentFrame = 0;
-    let isDragging = false;
-    let imagePosition = { x: 0, y: 0 };
-    let dragOffset = { x: 0, y: 0 };
 
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
 
+    // Load all frames into the images array
     for (let i = 0; i <= frameCount; i++) {
       const img = new Image();
       img.src = `assets/frames/${i}.png`;
       images.push(img);
     }
 
+    // Access the back-facing camera
     navigator.mediaDevices
       .getUserMedia({
         video: {
@@ -85,8 +84,10 @@
           const img = images[currentFrame];
           const size = Math.min(canvas.width, canvas.height) / 2;
 
-          // Draw draggable image
-          ctx.drawImage(img, imagePosition.x, imagePosition.y, size, size);
+          // Draw the image centered on the canvas
+          const x = (canvas.width - size) / 2;
+          const y = (canvas.height - size) / 2;
+          ctx.drawImage(img, x, y, size, size);
         }
 
         // Increment frame if not at the last frame
@@ -94,52 +95,10 @@
           currentFrame++;
           setTimeout(() => requestAnimationFrame(drawFrame), frameInterval);
         } else {
-          // Animation stopped on last frame
+          // Keep redrawing the last frame
           requestAnimationFrame(drawFrame);
         }
       }
-    }
-
-    // Mouse or touch event listeners for dragging
-    canvas.addEventListener('mousedown', (e) => startDrag(e));
-    canvas.addEventListener('mousemove', (e) => drag(e));
-    canvas.addEventListener('mouseup', () => endDrag());
-    canvas.addEventListener('mouseleave', () => endDrag());
-
-    canvas.addEventListener('touchstart', (e) => startDrag(e.touches[0]));
-    canvas.addEventListener('touchmove', (e) => drag(e.touches[0]));
-    canvas.addEventListener('touchend', () => endDrag());
-
-    function startDrag(event) {
-      const size = Math.min(canvas.width, canvas.height) / 2;
-      const mouseX = event.clientX;
-      const mouseY = event.clientY;
-
-      // Check if the click is within the draggable image
-      if (
-        mouseX > imagePosition.x &&
-        mouseX < imagePosition.x + size &&
-        mouseY > imagePosition.y &&
-        mouseY < imagePosition.y + size
-      ) {
-        isDragging = true;
-        dragOffset.x = mouseX - imagePosition.x;
-        dragOffset.y = mouseY - imagePosition.y;
-      }
-    }
-
-    function drag(event) {
-      if (isDragging) {
-        const mouseX = event.clientX;
-        const mouseY = event.clientY;
-
-        imagePosition.x = mouseX - dragOffset.x;
-        imagePosition.y = mouseY - dragOffset.y;
-      }
-    }
-
-    function endDrag() {
-      isDragging = false;
     }
   </script>
 </body>
