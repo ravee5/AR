@@ -3,7 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AR</title>
+  <title>Marker-Based AR with PNG Animation</title>
+  <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
+  <script src="https://cdn.rawgit.com/jeromeetienne/ar.js/1.7.2/aframe/build/aframe-ar.min.js"></script>
   <style>
     body {
       margin: 0;
@@ -20,12 +22,24 @@
   </style>
 </head>
 <body>
-  <video autoplay muted playsinline></video>
-  <canvas></canvas>
+  <!-- A-Frame AR scene -->
+  <a-scene embedded arjs>
+    <!-- Marker -->
+    <a-marker type="pattern" url="assets/prot.patt">
+        <!-- PNG animation trigger -->
+        <a-entity id="animation-trigger" position="0 0.5 0"></a-entity>
+      </a-marker>
+     
+    <a-entity camera></a-entity>
+  </a-scene>
+
+  <!-- Video and Canvas for PNG Animation -->
+  <video autoplay muted playsinline style="display: none;"></video>
+  <canvas id="animationCanvas"></canvas>
 
   <script>
     const video = document.querySelector('video');
-    const canvas = document.querySelector('canvas');
+    const canvas = document.getElementById('animationCanvas');
     const ctx = canvas.getContext('2d');
 
     const images = [];
@@ -38,7 +52,7 @@
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
 
-    // Load all frames into the images array
+    // Load PNG sequence frames
     for (let i = 0; i <= frameCount; i++) {
       const img = new Image();
       img.src = `assets/frames/${i}.png`;
@@ -78,6 +92,7 @@
 
     function drawFrame() {
       if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
         if (images[currentFrame]) {
@@ -95,11 +110,25 @@
           currentFrame++;
           setTimeout(() => requestAnimationFrame(drawFrame), frameInterval);
         } else {
-          // Keep redrawing the last frame
+          // Loop the animation
+          currentFrame = 0;
           requestAnimationFrame(drawFrame);
         }
       }
     }
+
+    // Marker animation trigger
+    const marker = document.querySelector('#animation-trigger');
+    marker.addEventListener('markerFound', () => {
+      console.log('Marker found! Starting animation...');
+      currentFrame = 0; // Reset animation to start
+      drawFrame();
+    });
+
+    marker.addEventListener('markerLost', () => {
+      console.log('Marker lost! Stopping animation...');
+      ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear canvas when marker is lost
+    });
   </script>
 </body>
 </html>
