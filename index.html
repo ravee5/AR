@@ -3,132 +3,114 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Marker-Based AR with PNG Animation</title>
- <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
- <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js/aframe/build/aframe-ar.min.js"></script>  
+  <title>AR with Marker and Animation</title>
+  <script src="https://aframe.io/releases/1.2.0/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js/aframe/build/aframe-ar.min.js"></script>
+  <script>
+    // Fix for 'willReadFrequently' warning
+    const originalGetContext = HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = function (type, options) {
+      if (type === '2d') {
+        options = options || {};
+        options.willReadFrequently = true;
+      }
+      return originalGetContext.call(this, type, options);
+    };
+  </script>
+
   <style>
     body {
       margin: 0;
       overflow: hidden;
     }
-    video, canvas {
+    #marker-overlay {
       position: absolute;
       top: 0;
       left: 0;
       width: 100%;
       height: 100%;
-      object-fit: cover;
+      background: rgba(255, 255, 255, 0.5);
+      z-index: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      pointer-events: none;
+    }
+    #marker-overlay img {
+      max-width: 50%;
+      max-height: 50%;
+      opacity: 0.5;
     }
   </style>
 </head>
 <body>
-  <!-- A-Frame AR scene -->
-  <a-scene embedded arjs>
-    <!-- Marker -->
-    <a-marker type="pattern" url="assets/prot.patt">
-        <!-- PNG animation trigger -->
-        <a-entity id="animation-trigger" position="0 0.5 0"></a-entity>
-      </a-marker>
-     
-    <a-entity camera></a-entity>
+  <!-- Overlay to guide users -->
+  <div id="marker-overlay">
+    <img src="assets/Prototype-01.jpg" alt="Scan the marker">
+  </div>
+
+  <!-- AR Scene -->
+  <a-scene embedded arjs="trackingMethod: best; sourceType: webcam; debugUIEnabled: false;">
+    <!-- Marker without borders -->
+    <a-marker preset="custom" type="pattern" url="assets/prot.patt">
+      <a-entity id="animation-container"></a-entity>
+    </a-marker>
   </a-scene>
 
-  <!-- Video and Canvas for PNG Animation -->
-  <video autoplay muted playsinline style="display: none;"></video>
-  <canvas id="animationCanvas"></canvas>
-
   <script>
-    const video = document.querySelector('video');
-    const canvas = document.getElementById('animationCanvas');
-    const ctx = canvas.getContext('2d');
+    const marker = document.querySelector('a-marker');
+    const overlay = document.getElementById('marker-overlay');
 
-    const images = [];
-    const frameCount = 114;
-    const animationDuration = 8000;
+    const frameCount = 113;
+    const animationDuration = 7000;
     const frameInterval = animationDuration / frameCount;
-
+    const images = [];
     let currentFrame = 0;
 
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-
-    // Load PNG sequence frames
+    // Preload all frames
     for (let i = 0; i <= frameCount; i++) {
       const img = new Image();
       img.src = `assets/frames/${i}.png`;
       images.push(img);
     }
 
-    // Access the back-facing camera
-    navigator.mediaDevices
-      .getUserMedia({
-        video: {
-          facingMode: { exact: "environment" }
-        }
-      })
-      .then((stream) => {
-        video.srcObject = stream;
-
-        video.addEventListener('play', () => {
-          requestAnimationFrame(drawFrame);
-        });
-      })
-      .catch((err) => {
-        console.error('Error accessing the back camera: ', err);
-
-        navigator.mediaDevices
-          .getUserMedia({ video: true })
-          .then((fallbackStream) => {
-            video.srcObject = fallbackStream;
-
-            video.addEventListener('play', () => {
-              requestAnimationFrame(drawFrame);
-            });
-          })
-          .catch((finalErr) => {
-            console.error('Error accessing any camera: ', finalErr);
-          });
-      });
-
-    function drawFrame() {
-      if (video.readyState === video.HAVE_ENOUGH_DATA) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-        if (images[currentFrame]) {
-          const img = images[currentFrame];
-          const size = Math.min(canvas.width, canvas.height) / 2;
-
-          // Draw the image centered on the canvas
-          const x = (canvas.width - size) / 2;
-          const y = (canvas.height - size) / 2;
-          ctx.drawImage(img, x, y, size, size);
-        }
-
-        // Increment frame if not at the last frame
-        if (currentFrame < frameCount - 1) {
-          currentFrame++;
-          setTimeout(() => requestAnimationFrame(drawFrame), frameInterval);
-        } else {
-          // Loop the animation
-          currentFrame = 0;
-          requestAnimationFrame(drawFrame);
-        }
-      }
-    }
-
-    // Marker animation trigger
-    const marker = document.querySelector('#animation-trigger');
+    // Event listener to trigger animation when the marker is detected
     marker.addEventListener('markerFound', () => {
-      console.log('Marker found! Starting animation...');
-      currentFrame = 0; // Reset animation to start
-      drawFrame();
+      overlay.style.display = 'none'; // Hide the guide overlay
+      playAnimation();
     });
 
     marker.addEventListener('markerLost', () => {
-      console.log('Marker lost! Stopping animation...');
-      ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear canvas when marker is lost
+      overlay.style.display = 'flex'; // Show the guide overlay
+      currentFrame = 0; // Reset animation
     });
+
+    function playAnimation() {
+      const animationContainer = document.querySelector('#animation-container');
+
+      function renderFrame() {
+        if (currentFrame < frameCount) {
+          const img = images[currentFrame];
+          const texture = new THREE.Texture(img);
+          texture.needsUpdate = true;
+
+          // Apply texture to a plane in AR
+          if (animationContainer.object3D.children.length === 0) {
+            const geometry = new THREE.PlaneGeometry(2, 2); // Size of plane
+            const material = new THREE.MeshBasicMaterial({ map: texture, transparent: true });
+            const mesh = new THREE.Mesh(geometry, material);
+            animationContainer.object3D.add(mesh);
+          } else {
+            animationContainer.object3D.children[0].material.map = texture;
+          }
+
+          currentFrame++;
+          setTimeout(renderFrame, frameInterval);
+        }
+      }
+      renderFrame();
+    }
   </script>
 </body>
 </html>
+
